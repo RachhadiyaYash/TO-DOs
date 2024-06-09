@@ -201,6 +201,8 @@ import React, { useState, useEffect } from "react";
 interface Task {
   task: string;
   priority: number;
+  isEditing: boolean;
+  error: string; // New property to track error messages
 }
 
 const UserInput: React.FC = () => {
@@ -220,32 +222,67 @@ const UserInput: React.FC = () => {
     return tasks.map((task, index) => (
       <div
         key={index}
-        className="flex items-center justify-between bg-white rounded-lg px-4 py-2 shadow-md md:shadow-2xl"
+        className="flex flex-col md:flex-row items-center justify-between bg-white rounded-lg px-4 py-2 shadow-md md:shadow-2xl"
       >
-        <div className="flex flex-col md:flex-row items-center w-full">
-          <div className="md:mr-auto mb-2 md:mb-0 md:pr-4">
-            <div className="my-2">
-              <span className="font-bold">Task -</span> {task.priority}
-            </div>
-            <div>
-              <span className="font-bold">Description -</span> {task.task}
-            </div>
-          </div>
-          <div className="flex justify-center md:justify-end">
+        {task.isEditing ? (
+          <div className="flex flex-col md:flex-row items-center w-full space-y-2 md:space-y-0 md:space-x-2">
+            <input
+              type="number"
+              className="border px-2 py-1 w-full md:w-auto"
+              min="1"
+              value={task.priority}
+              onChange={(e) => handleTaskPriorityChange(index, e.target.value)}
+            />
+            <input
+              type="text"
+              className="border px-2 py-1 w-full md:w-auto"
+              value={task.task}
+              onChange={(e) => handleTaskTextChange(index, e.target.value)}
+            />
             <button
-              className="text-blue-500 mr-2 bg-green-200 rounded p-3"
-              onClick={() => editTask(index)}
+              className="text-green-500 bg-green-200 rounded p-2"
+              onClick={() => saveTask(index)}
             >
-              Edit
+              Save
             </button>
             <button
-              className="text-red-500 bg-red-200 rounded p-3"
-              onClick={() => deleteTask(index)}
+              className="text-gray-500 bg-gray-200 rounded p-2"
+              onClick={() => cancelEdit(index)}
             >
-              Delete
+              Cancel
             </button>
+            {task.error && (
+              <div className="text-red-500 text-xs mt-1 md:mt-0 md:ml-2">
+                {task.error}
+              </div>
+            )}
           </div>
-        </div>
+        ) : (
+          <div className="flex flex-col md:flex-row items-center w-full space-y-2 md:space-y-0 md:space-x-2">
+            <div className="md:mr-auto mb-2 md:mb-0 md:pr-4">
+              <div className="my-2">
+                <span className="font-bold">Task -</span> {task.priority}
+              </div>
+              <div>
+                <span className="font-bold">Description -</span> {task.task}
+              </div>
+            </div>
+            <div className="flex justify-center md:justify-end">
+              <button
+                className="text-blue-500 mr-2 bg-green-200 rounded p-2"
+                onClick={() => editTask(index)}
+              >
+                Edit
+              </button>
+              <button
+                className="text-red-500 bg-red-200 rounded p-2"
+                onClick={() => deleteTask(index)}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     ));
   };
@@ -256,53 +293,92 @@ const UserInput: React.FC = () => {
 
     if (existingIndex !== -1) {
       newTasks = newTasks.map((t) => {
-        if (t.priority >= priority) {
+        if (t.priority > priority) {
+          // Fix typo here
           t.priority++;
         }
         return t;
       });
     }
 
-    newTasks.push({ task: taskText, priority });
+    newTasks.push({ task: taskText, priority, isEditing: false, error: "" });
     newTasks.sort((a, b) => a.priority - b.priority);
     setTasks(newTasks);
   };
 
   const editTask = (index: number) => {
-    const newTask = prompt("Edit task:", tasks[index].task);
-    if (newTask !== null) {
-      const newPriority = parseInt(
-        prompt(
-          "Enter new priority for the task:",
-          tasks[index].priority.toString()
-        ) || ""
-      );
-      if (!isNaN(newPriority) && newPriority >= 1) {
-        const newTasks = [...tasks];
-        const oldPriority = newTasks[index].priority;
-        newTasks[index].task = newTask;
-        if (newPriority !== oldPriority) {
-          const existingIndex = newTasks.findIndex(
-            (task) => task.priority === newPriority
-          );
-          if (existingIndex !== -1) {
-            newTasks.forEach((task) => {
-              if (task.priority >= newPriority && task !== newTasks[index]) {
-                task.priority++;
-              }
-            });
-          }
-          newTasks[index].priority = newPriority;
-          newTasks.sort((a, b) => a.priority - b.priority);
-          newTasks.forEach((task, i) => {
-            task.priority = i + 1;
-          });
-          setTasks(newTasks);
-        }
-      } else {
-        alert("Please enter a valid priority (a positive integer).");
+    const newTasks = tasks.map((task, i) => ({
+      ...task,
+      isEditing: i === index,
+      error: "", // Clear any previous error messages
+    }));
+    setTasks(newTasks);
+  };
+
+  const handleTaskPriorityChange = (index: number, priority: string) => {
+    const newTasks = [...tasks];
+    newTasks[index].priority = parseInt(priority);
+    setTasks(newTasks);
+  };
+
+  const handleTaskTextChange = (index: number, text: string) => {
+    const newTasks = [...tasks];
+    newTasks[index].task = text;
+    setTasks(newTasks);
+  };
+
+  const saveTask = (index: number) => {
+    const newTasks = [...tasks];
+    if (
+      !newTasks[index].task.trim() ||
+      isNaN(newTasks[index].priority) ||
+      newTasks[index].priority < 1
+    ) {
+      newTasks[index].error =
+        "Please enter valid task details and a positive integer priority.";
+      setTasks(newTasks);
+      return;
+    }
+
+    const oldPriority = newTasks[index].priority;
+    // const newPriority = newTasks[index].priority; // This line is unnecessary
+
+    // Adjust priorities for tasks below the edited task
+    for (let i = index + 1; i < newTasks.length; i++) {
+      if (
+        newTasks[i].priority <= newTasks[index].priority && // Use newTasks[index].priority here
+        newTasks[i].priority > oldPriority
+      ) {
+        newTasks[i].priority--;
       }
     }
+
+    // Adjust priorities for tasks above the edited task
+    for (let i = index - 1; i >= 0; i--) {
+      if (
+        newTasks[i].priority >= newTasks[index].priority && // Use newTasks[index].priority here
+        newTasks[i].priority < oldPriority
+      ) {
+        newTasks[i].priority++;
+      }
+    }
+
+    newTasks[index].isEditing = false;
+    newTasks[index].error = "";
+    newTasks.sort((a, b) => a.priority - b.priority);
+    newTasks.forEach((task, i) => {
+      task.priority = i + 1;
+    });
+    setTasks(newTasks);
+  };
+
+  const cancelEdit = (index: number) => {
+    const newTasks = tasks.map((task, i) => ({
+      ...task,
+      isEditing: false,
+      error: "", // Clear any previous error messages
+    }));
+    setTasks(newTasks);
   };
 
   const deleteTask = (index: number) => {
@@ -330,12 +406,12 @@ const UserInput: React.FC = () => {
   };
 
   return (
-    <div className="container mx-auto py-8">
+    <div className="container mx-auto py-8  px-2 my-5">
       <h1 className="text-4xl md:text-6xl font-bold text-center mb-8">
         Dynamic Todo App
       </h1>
       <div className="container mx-auto py-8">
-        <div className="flex flex-col md:flex-row items-center md:items-start space-y-4 md:space-y-0 md:space-x-4 my-3">
+        <div className="flex flex-col md:flex-row items-center justify-center  space-y-4 md:space-y-0 md:space-x-4 my-3">
           <input
             id="taskPriority"
             type="number"
@@ -361,8 +437,11 @@ const UserInput: React.FC = () => {
             Add Task
           </button>
         </div>
-        <div className="flex items-center space-x-4 my-3">
-          <p id="errorMessage" className="text-xs text-red-500">
+        <div className="flex items-center  justify-center space-x-4 my-3">
+          <p
+            id="errorMessage"
+            className="text-xs text-center justify-center text-red-500"
+          >
             {errorMessage}
           </p>
         </div>
